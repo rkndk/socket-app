@@ -1,50 +1,83 @@
-# Welcome to your Expo app 👋
+# Local Quiz Game 🎮
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A real-time multiplayer quiz game designed for local WiFi networks using **WebSocket over TCP**.
 
-## Get started
+- **Host**: Runs on Android TV or Android Phone
+- **Clients**: Connect via React Native App or Web Browser
+- **Network**: Local WiFi coverage (Zero internet required)
 
-1. Install dependencies
+## Features
 
-   ```bash
-   npm install
-   ```
+- **Cross-Platform**: React Native (iOS/Android) & Web Clients work together seamlessly
+- **No Internet Needed**: Entirely local communication
+- **TV Optimized**: UI scales for large screens and supports remote control D-pad navigation
+- **WebSocket Protocol**: Custom implementation over raw TCP sockets for maximum compatibility without native dependencies
 
-2. Start the app
+## Architecture
 
-   ```bash
-   npx expo start
-   ```
+The project uses a custom dual-protocol server running on the Host device:
 
-In the output, you'll find options to open the app in a
+1. **Underlying Layer**: `react-native-tcp-socket` provides raw TCP access
+2. **Protocol Layer**: Custom TypeScript implementation handles WebSocket handshakes and framing
+3. **Clients**:
+   - **App**: Uses React Native's built-in `WebSocket`
+   - **Web**: Uses Browser's native `WebSocket` API
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Tech Stack
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- **Framework**: Expo / React Native
+- **Language**: TypeScript
+- **Networking**: `react-native-tcp-socket` + Custom WebSocket Protocol
+- **Styling**: StyleSheet (Responsive for TV/Mobile)
 
-## Get a fresh project
+## getting Started
 
-When you're ready, run:
+### Prerequisites
+
+- Node.js & npm/bun
+- Android Emulator or Physical Device (Phone/TV)
+- Devices must be on the **SAME WiFi network**
+
+### Installation
 
 ```bash
-npm run reset-project
+bun install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Running the App (Host & Client)
 
-## Learn more
+You can run the same app on multiple devices. One acts as Host, others as Clients.
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+# Build and run on Android
+npx expo run:android
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+# Build and run on iOS
+npx expo run:ios
+```
 
-## Join the community
+### Running the Web Client
 
-Join our community of developers creating universal apps.
+For testing or browser-based players:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1. Open `web-client.html` in any modern web browser
+2. Enter the Host's IP Address and Port (default: 3000)
+3. Enter your Name and Connect!
+
+## How to Play
+
+1. **Start Host**: Open app, select "Host Game". Note the IP Address displayed.
+2. **Join Players**:
+   - **App**: Open app, select "Join Game", enter Host IP.
+   - **Web**: Open html file, enter Host IP.
+3. **Start Quiz**: Once everyone joins, the Host clicks "Start Game".
+4. **Play**: Answer questions on your device. Results are shown live on the Host screen.
+
+## Troubleshooting
+
+- **Server Error: "Property 'Buffer' doesn't exist"**:
+  - Restart the app. We added a polyfill in `services/polyfills.ts` that loads on startup.
+- **Connection Failed**:
+  - Ensure devices are on the **same WiFi**.
+  - Check if Host IP is correct.
+  - Some public WiFi networks block peer-to-peer communication. Use a personal hotspot or home router.

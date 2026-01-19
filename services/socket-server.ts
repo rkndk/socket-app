@@ -1,9 +1,20 @@
 import { Player, SocketMessage } from "@/types/game";
+import { Buffer } from "buffer";
 import { NetworkInfo } from "react-native-network-info";
 import TcpSocket from "react-native-tcp-socket";
+import {
+  createCloseFrame,
+  createPongFrame,
+  createUpgradeResponse,
+  decodeFrame,
+  encodeFrame,
+  generateAcceptKey,
+  isWebSocketUpgradeRequest,
+  OPCODE,
+  parseUpgradeRequest,
+} from "./websocket-protocol";
 
 const PORT = 3000;
-const MESSAGE_DELIMITER = "\n";
 
 type MessageHandler = (clientId: string, message: SocketMessage) => void;
 type ConnectionHandler = (clientId: string) => void;
@@ -12,6 +23,8 @@ interface ClientSocket {
   id: string;
   socket: TcpSocket.Socket;
   player?: Player;
+  handshakeComplete: boolean;
+  buffer: Buffer;
 }
 
 class SocketServer {
@@ -51,36 +64,21 @@ class SocketServer {
         const server = TcpSocket.createServer((socket) => {
           const clientId = `client_${++this.clientCounter}`;
 
-          this.clients.set(clientId, { id: clientId, socket });
-          console.log(`Client connected: ${clientId}`);
-
-          if (this.connectHandler) {
-            this.connectHandler(clientId);
-          }
-
-          let buffer = "";
+          const client: ClientSocket = {
+            id: clientId,
+            socket,
+            handshakeComplete: false,
+            buffer: Buffer.alloc(0),
+          };
+          this.clients.set(clientId, client);
+          console.log(`[WebSocket] Client connected: ${clientId}`);
 
           socket.on("data", (data) => {
-            buffer += data.toString();
-            const messages = buffer.split(MESSAGE_DELIMITER);
-            buffer = messages.pop() || "";
-
-            for (const msg of messages) {
-              if (msg.trim()) {
-                try {
-                  const parsed = JSON.parse(msg) as SocketMessage;
-                  if (this.messageHandler) {
-                    this.messageHandler(clientId, parsed);
-                  }
-                } catch (e) {
-                  console.error("Failed to parse message:", e);
-                }
-              }
-            }
+            this.handleData(clientId, data);
           });
 
           socket.on("close", () => {
-            console.log(`Client disconnected: ${clientId}`);
+            console.log(`[WebSocket] Client disconnected: ${clientId}`);
             this.clients.delete(clientId);
             if (this.disconnectHandler) {
               this.disconnectHandler(clientId);
@@ -88,7 +86,7 @@ class SocketServer {
           });
 
           socket.on("error", (error) => {
-            console.error(`Client error (${clientId}):`, error);
+            console.error(`[WebSocket] Client error (${clientId}):`, error);
             this.clients.delete(clientId);
             if (this.disconnectHandler) {
               this.disconnectHandler(clientId);
@@ -108,12 +106,12 @@ class SocketServer {
         this.server = server;
 
         this.server.listen({ port: PORT, host: "0.0.0.0" }, () => {
-          console.log(`Server started on port ${PORT}`);
+          console.log(`[WebSocket] Server started on port ${PORT}`);
           resolve();
         });
 
         this.server.on("error", (error) => {
-          console.error("Server error:", error);
+          console.error("[WebSocket] Server error:", error);
           reject(error);
         });
       } catch (error) {
@@ -122,10 +120,118 @@ class SocketServer {
     });
   }
 
+  private handleData(clientId: string, data: Buffer | string): void {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    // Convert string to Buffer if needed
+    const dataBuffer = typeof data === "string" ? Buffer.from(data) : data;
+
+    if (!client.handshakeComplete) {
+      // Handle WebSocket upgrade handshake
+      if (isWebSocketUpgradeRequest(dataBuffer)) {
+        const upgrade = parseUpgradeRequest(dataBuffer);
+        if (upgrade) {
+          const acceptKey = generateAcceptKey(upgrade.key);
+          const response = createUpgradeResponse(acceptKey);
+          client.socket.write(response);
+          client.handshakeComplete = true;
+          console.log(`[WebSocket] Handshake complete for ${clientId}`);
+
+          // Notify connect handler after handshake
+          if (this.connectHandler) {
+            this.connectHandler(clientId);
+          }
+        } else {
+          console.error(`[WebSocket] Invalid upgrade request from ${clientId}`);
+          client.socket.destroy();
+          this.clients.delete(clientId);
+        }
+      } else {
+        console.error(`[WebSocket] Non-WebSocket connection from ${clientId}`);
+        client.socket.destroy();
+        this.clients.delete(clientId);
+      }
+      return;
+    }
+
+    // Append new data to buffer
+    client.buffer = Buffer.concat([client.buffer, dataBuffer]);
+
+    // Process all complete frames in buffer
+    while (client.buffer.length > 0) {
+      const frame = decodeFrame(client.buffer);
+      if (!frame) break; // Incomplete frame, wait for more data
+
+      // Remove processed bytes from buffer
+      client.buffer = client.buffer.subarray(frame.frameLength);
+
+      this.handleFrame(clientId, frame);
+    }
+  }
+
+  private handleFrame(
+    clientId: string,
+    frame: { opcode: number; payload: Buffer },
+  ): void {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    switch (frame.opcode) {
+      case OPCODE.TEXT:
+        // Parse JSON message
+        try {
+          const text = frame.payload.toString("utf8");
+          const message = JSON.parse(text) as SocketMessage;
+          if (this.messageHandler) {
+            this.messageHandler(clientId, message);
+          }
+        } catch (e) {
+          console.error(
+            `[WebSocket] Failed to parse message from ${clientId}:`,
+            e,
+          );
+        }
+        break;
+
+      case OPCODE.BINARY:
+        // We don't use binary, but log it
+        console.log(`[WebSocket] Received binary frame from ${clientId}`);
+        break;
+
+      case OPCODE.CLOSE:
+        // Client requested close
+        console.log(`[WebSocket] Close frame from ${clientId}`);
+        client.socket.write(createCloseFrame(1000));
+        client.socket.destroy();
+        this.clients.delete(clientId);
+        if (this.disconnectHandler) {
+          this.disconnectHandler(clientId);
+        }
+        break;
+
+      case OPCODE.PING:
+        // Respond with pong
+        client.socket.write(createPongFrame(frame.payload));
+        break;
+
+      case OPCODE.PONG:
+        // Client responded to our ping (if we sent one)
+        break;
+    }
+  }
+
   stop(): void {
-    // Close all client connections
+    // Send close frame to all clients
     for (const client of this.clients.values()) {
-      client.socket.destroy();
+      try {
+        if (client.handshakeComplete) {
+          client.socket.write(createCloseFrame(1001, "Server shutting down"));
+        }
+        client.socket.destroy();
+      } catch {
+        // Ignore errors during cleanup
+      }
     }
     this.clients.clear();
 
@@ -138,16 +244,20 @@ class SocketServer {
 
   sendToClient(clientId: string, message: SocketMessage): void {
     const client = this.clients.get(clientId);
-    if (client) {
-      const data = JSON.stringify(message) + MESSAGE_DELIMITER;
-      client.socket.write(data);
+    if (client && client.handshakeComplete) {
+      const data = JSON.stringify(message);
+      const frame = encodeFrame(data, OPCODE.TEXT);
+      client.socket.write(frame);
     }
   }
 
   broadcast(message: SocketMessage): void {
-    const data = JSON.stringify(message) + MESSAGE_DELIMITER;
+    const data = JSON.stringify(message);
+    const frame = encodeFrame(data, OPCODE.TEXT);
     for (const client of this.clients.values()) {
-      client.socket.write(data);
+      if (client.handshakeComplete) {
+        client.socket.write(frame);
+      }
     }
   }
 

@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quiz Game - Web Client</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+        min-height: 100vh;
+        color: #fff;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 500px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 30px;
+        font-size: 28px;
+      }
+
+      .emoji {
+        font-size: 60px;
+        text-align: center;
+        display: block;
+        margin-bottom: 20px;
+      }
+
+      .card {
+        background: rgba(26, 26, 46, 0.8);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+
+      .form-group {
+        margin-bottom: 16px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #ccc;
+      }
+
+      input {
+        width: 100%;
+        padding: 14px;
+        border: 2px solid #252a4a;
+        border-radius: 12px;
+        background: #1a1a2e;
+        color: #fff;
+        font-size: 16px;
+        outline: none;
+      }
+
+      input:focus {
+        border-color: #4a00e0;
+      }
+
+      button {
+        width: 100%;
+        padding: 16px;
+        border: none;
+        border-radius: 14px;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: opacity 0.2s;
+      }
+
+      button:hover {
+        opacity: 0.9;
+      }
+
+      button:disabled {
+        background: #333 !important;
+        cursor: not-allowed;
+      }
+
+      .btn-connect {
+        background: #00b894;
+        color: #fff;
+      }
+
+      .btn-disconnect {
+        background: #ff6b6b;
+        color: #fff;
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 20px;
+        background: #1a1a2e;
+        margin-bottom: 20px;
+      }
+
+      .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #ff6b6b;
+      }
+
+      .status-dot.connected {
+        background: #00ff88;
+      }
+
+      .game-section {
+        display: none;
+      }
+
+      .game-section.active {
+        display: block;
+      }
+
+      .players-list {
+        list-style: none;
+      }
+
+      .players-list li {
+        padding: 12px 16px;
+        background: #252a4a;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .player-index {
+        color: #4a00e0;
+        font-weight: bold;
+      }
+
+      .question-card {
+        background: linear-gradient(135deg, #4a00e0 0%, #8e2de2 100%);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+
+      .question-number {
+        font-size: 14px;
+        opacity: 0.8;
+        margin-bottom: 8px;
+      }
+
+      .question-text {
+        font-size: 20px;
+        font-weight: bold;
+        line-height: 1.4;
+      }
+
+      .options {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .option-btn {
+        background: #252a4a;
+        text-align: left;
+        padding: 16px;
+      }
+
+      .option-btn:hover {
+        background: #363b6a;
+      }
+
+      .option-btn.selected {
+        background: #4a00e0;
+      }
+
+      .option-btn.correct {
+        background: #00b894;
+      }
+
+      .option-btn.wrong {
+        background: #ff6b6b;
+      }
+
+      .result-card {
+        text-align: center;
+        padding: 30px;
+      }
+
+      .result-emoji {
+        font-size: 80px;
+        margin-bottom: 20px;
+      }
+
+      .leaderboard {
+        margin-top: 20px;
+      }
+
+      .leaderboard-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: #252a4a;
+        border-radius: 10px;
+        margin-bottom: 8px;
+      }
+
+      .leaderboard-item.you {
+        background: #4a00e0;
+      }
+
+      .score {
+        font-weight: bold;
+        color: #00ff88;
+      }
+
+      .log {
+        background: #0a0a15;
+        border-radius: 12px;
+        padding: 16px;
+        max-height: 200px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+        margin-top: 20px;
+      }
+
+      .log-entry {
+        margin-bottom: 4px;
+        color: #888;
+      }
+
+      .log-entry.info {
+        color: #00b894;
+      }
+
+      .log-entry.error {
+        color: #ff6b6b;
+      }
+
+      .log-entry.message {
+        color: #4a9fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <span class="emoji">🎮</span>
+      <h1>Quiz Game</h1>
+
+      <!-- Connection Section -->
+      <div id="connection-section" class="card">
+        <div class="form-group">
+          <label for="ip">Host IP Address</label>
+          <input type="text" id="ip" placeholder="192.168.1.x" />
+        </div>
+        <div class="form-group">
+          <label for="port">Port</label>
+          <input type="text" id="port" value="3000" />
+        </div>
+        <div class="form-group">
+          <label for="name">Your Name</label>
+          <input type="text" id="name" placeholder="Enter your name" />
+        </div>
+        <button id="connect-btn" class="btn-connect" onclick="connect()">
+          Connect
+        </button>
+      </div>
+
+      <!-- Status -->
+      <div class="status">
+        <div id="status-dot" class="status-dot"></div>
+        <span id="status-text">Disconnected</span>
+      </div>
+
+      <!-- Lobby Section -->
+      <div id="lobby-section" class="game-section card">
+        <h2>Waiting for game to start...</h2>
+        <p style="margin-top: 10px; color: #888">Players in lobby:</p>
+        <ul id="players-list" class="players-list"></ul>
+        <button
+          id="disconnect-btn"
+          class="btn-disconnect"
+          onclick="disconnect()"
+        >
+          Leave
+        </button>
+      </div>
+
+      <!-- Game Section -->
+      <div id="game-section" class="game-section">
+        <div id="question-card" class="question-card">
+          <div id="question-number" class="question-number">Question 1/10</div>
+          <div id="question-text" class="question-text">
+            Loading question...
+          </div>
+        </div>
+        <div id="options" class="options"></div>
+        <div
+          id="feedback"
+          class="card"
+          style="display: none; text-align: center"
+        ></div>
+      </div>
+
+      <!-- Results Section -->
+      <div id="results-section" class="game-section card result-card">
+        <div class="result-emoji">🏆</div>
+        <h2>Game Over!</h2>
+        <div id="leaderboard" class="leaderboard"></div>
+        <button
+          class="btn-connect"
+          onclick="disconnect()"
+          style="margin-top: 20px"
+        >
+          Play Again
+        </button>
+      </div>
+
+      <!-- Debug Log -->
+      <div class="log" id="log"></div>
+    </div>
+
+    <script>
+      let ws = null;
+      let playerName = "";
+      let currentQuestion = null;
+      let hasAnswered = false;
+
+      function log(message, type = "") {
+        const logEl = document.getElementById("log");
+        const entry = document.createElement("div");
+        entry.className = "log-entry " + type;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logEl.appendChild(entry);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function updateStatus(connected) {
+        const dot = document.getElementById("status-dot");
+        const text = document.getElementById("status-text");
+        dot.className = "status-dot" + (connected ? " connected" : "");
+        text.textContent = connected ? "Connected" : "Disconnected";
+      }
+
+      function showSection(sectionId) {
+        document
+          .querySelectorAll(".game-section")
+          .forEach((s) => s.classList.remove("active"));
+        if (sectionId) {
+          document.getElementById(sectionId).classList.add("active");
+        }
+      }
+
+      function connect() {
+        const ip = document.getElementById("ip").value.trim();
+        const port = document.getElementById("port").value.trim();
+        playerName = document.getElementById("name").value.trim();
+
+        if (!ip || !port || !playerName) {
+          alert("Please fill in all fields");
+          return;
+        }
+
+        log(`Connecting to ws://${ip}:${port}...`, "info");
+
+        try {
+          ws = new WebSocket(`ws://${ip}:${port}`);
+
+          ws.onopen = () => {
+            log("Connected!", "info");
+            updateStatus(true);
+
+            // Send join message
+            ws.send(
+              JSON.stringify({
+                type: "PLAYER_JOIN",
+                payload: { name: playerName },
+              }),
+            );
+            log(`Sent PLAYER_JOIN as "${playerName}"`, "message");
+
+            document.getElementById("connection-section").style.display =
+              "none";
+            showSection("lobby-section");
+          };
+
+          ws.onmessage = (event) => {
+            log(`Received: ${event.data.substring(0, 100)}...`, "message");
+            try {
+              const message = JSON.parse(event.data);
+              handleMessage(message);
+            } catch (e) {
+              log("Failed to parse message: " + e, "error");
+            }
+          };
+
+          ws.onclose = (event) => {
+            log(`Disconnected: ${event.code} ${event.reason}`, "info");
+            updateStatus(false);
+            resetUI();
+          };
+
+          ws.onerror = (event) => {
+            log("Connection error", "error");
+            updateStatus(false);
+          };
+        } catch (e) {
+          log("Failed to connect: " + e, "error");
+        }
+      }
+
+      function disconnect() {
+        if (ws) {
+          ws.close();
+          ws = null;
+        }
+        resetUI();
+      }
+
+      function resetUI() {
+        document.getElementById("connection-section").style.display = "block";
+        showSection(null);
+        updateStatus(false);
+      }
+
+      function handleMessage(message) {
+        switch (message.type) {
+          case "PLAYER_JOINED":
+            updatePlayersList(message.payload.players);
+            break;
+
+          case "PLAYER_LEFT":
+            updatePlayersList(message.payload.players);
+            break;
+
+          case "QUESTION":
+            showQuestion(message.payload);
+            break;
+
+          case "ANSWER_RECEIVED":
+            showFeedback(message.payload);
+            break;
+
+          case "GAME_END":
+            showResults(message.payload);
+            break;
+        }
+      }
+
+      function updatePlayersList(players) {
+        const list = document.getElementById("players-list");
+        list.innerHTML = players
+          .map(
+            (p, i) => `
+        <li>
+          <span class="player-index">${i + 1}</span>
+          <span>${p.name}${p.name === playerName ? " (You)" : ""}</span>
+        </li>
+      `,
+          )
+          .join("");
+      }
+
+      function showQuestion(payload) {
+        showSection("game-section");
+        currentQuestion = payload;
+        hasAnswered = false;
+
+        document.getElementById("question-number").textContent =
+          `Question ${payload.index + 1}/${payload.total}`;
+        document.getElementById("question-text").textContent =
+          payload.question.question;
+        document.getElementById("feedback").style.display = "none";
+
+        const optionsEl = document.getElementById("options");
+        optionsEl.innerHTML = payload.question.options
+          .map(
+            (opt, i) => `
+        <button class="option-btn" onclick="selectAnswer(${i})">${opt}</button>
+      `,
+          )
+          .join("");
+      }
+
+      function selectAnswer(index) {
+        if (hasAnswered) return;
+        hasAnswered = true;
+
+        // Highlight selected
+        const buttons = document.querySelectorAll(".option-btn");
+        buttons[index].classList.add("selected");
+
+        // Send answer
+        ws.send(
+          JSON.stringify({
+            type: "ANSWER",
+            payload: {
+              playerId: playerName,
+              questionId: currentQuestion.question.id,
+              selectedAnswer: index,
+            },
+          }),
+        );
+        log(`Sent answer: ${index}`, "message");
+      }
+
+      function showFeedback(payload) {
+        const buttons = document.querySelectorAll(".option-btn");
+
+        // Show correct answer
+        buttons[payload.correctAnswer].classList.add("correct");
+
+        // Mark wrong if selected different
+        buttons.forEach((btn, i) => {
+          if (
+            btn.classList.contains("selected") &&
+            i !== payload.correctAnswer
+          ) {
+            btn.classList.add("wrong");
+          }
+        });
+
+        const feedback = document.getElementById("feedback");
+        feedback.style.display = "block";
+        feedback.innerHTML = payload.correct
+          ? '<span style="color: #00ff88; font-size: 24px;">✓ Correct!</span>'
+          : '<span style="color: #ff6b6b; font-size: 24px;">✗ Wrong</span>';
+      }
+
+      function showResults(payload) {
+        showSection("results-section");
+
+        const leaderboard = document.getElementById("leaderboard");
+        leaderboard.innerHTML = payload.leaderboard
+          .map(
+            (p, i) => `
+        <div class="leaderboard-item ${p.name === playerName ? "you" : ""}">
+          <span>${i + 1}. ${p.name}</span>
+          <span class="score">${p.score} pts</span>
+        </div>
+      `,
+          )
+          .join("");
+      }
+    </script>
+  </body>
+</html>
